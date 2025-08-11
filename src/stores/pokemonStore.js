@@ -1,19 +1,38 @@
+// Import Pinia's defineStore function to create a store
 import { defineStore } from 'pinia'
 
+// Define and export the Pokémon store
 export const usePokemonStore = defineStore('pokemon', {
+  // --- STATE ---
   state: () => ({
-    pokemons: [],
-    loading: false
+    pokemons: [],   // Holds the array of Pokémon data
+    loading: false  // Tracks loading state for API requests
   }),
 
+  // --- ACTIONS ---
   actions: {
+    /**
+     * Fetches Pokémon data from the PokéAPI.
+     * 1. Gets the list of Pokémon with basic info (name + URL).
+     * 2. For each Pokémon, fetches detailed data including:
+     *    - Image
+     *    - Height & weight
+     *    - Types and abilities
+     *    - Base experience
+     *    - Special attack & defense stats
+     *    - Weaknesses (from type damage relations)
+     *    - Description (from species data)
+     * 3. Stores the processed Pokémon objects in `pokemons`.
+     */
     async fetchPokemons() {
       this.loading = true
       try {
+        // Step 1: Fetch Pokémon list
         const res = await fetch('https://pokeapi.co/api/v2/pokemon?limit=100')
         const data = await res.json()
         const list = data.results
 
+        // Step 2: Fetch details for each Pokémon in parallel
         const detailedList = await Promise.all(
           list.map(async (p) => {
             const r = await fetch(p.url)
@@ -23,13 +42,15 @@ export const usePokemonStore = defineStore('pokemon', {
             const speciesRes = await fetch(d.species.url)
             const speciesData = await speciesRes.json()
 
-            // Weaknesses from type data
+            // Fetch type data to determine weaknesses
             const typeRes = await Promise.all(
               d.types.map(async (t) => {
                 const tr = await fetch(t.type.url)
                 return await tr.json()
               })
             )
+
+            // Extract weaknesses from type damage relations
             const weaknesses = [
               ...new Set(
                 typeRes.flatMap(t =>
@@ -38,6 +59,7 @@ export const usePokemonStore = defineStore('pokemon', {
               )
             ]
 
+            // Return the complete Pokémon object
             return {
               name: d.name,
               image: d.sprites.other['official-artwork'].front_default,
@@ -59,18 +81,29 @@ export const usePokemonStore = defineStore('pokemon', {
           })
         )
 
+        // Step 3: Save results to the store
         this.pokemons = detailedList
       } catch (err) {
         console.error('Error fetching Pokémon:', err)
       } finally {
+        // Reset loading state
         this.loading = false
       }
     },
 
+    /**
+     * Replaces the current Pokémon list with a new one.
+     * @param {Array} list - The new array of Pokémon objects.
+     */
     setPokemons(list) {
       this.pokemons = list
     },
 
+    /**
+     * Updates a single Pokémon in the list by name.
+     * @param {String} name - The Pokémon's name to update.
+     * @param {Object} updated - The updated fields and values.
+     */
     updatePokemon(name, updated) {
       const idx = this.pokemons.findIndex(p => p.name === name)
       if (idx !== -1) {
